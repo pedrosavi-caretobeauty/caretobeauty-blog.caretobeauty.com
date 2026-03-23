@@ -1,0 +1,140 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Post {
+  id                Int      @id @default(autoincrement())
+  slug              String   @unique @db.VarChar(255)
+  title             String   @db.VarChar(500)
+  excerpt           String?  @db.Text
+  content           String   @db.LongText
+  status            String   @default("publish") @db.VarChar(20) // publish, draft, pending, rejected
+  publishedAt       DateTime @map("published_at")
+  updatedAt         DateTime @map("updated_at")
+  lastRevisedAt     DateTime? @map("last_revised_at") // custom_last_revision from WP
+
+  // Author
+  authorId          Int      @map("author_id")
+  author            Author   @relation(fields: [authorId], references: [id])
+
+  // Featured image
+  featuredImageId   Int?     @map("featured_image_id")
+  featuredImage     Media?   @relation(fields: [featuredImageId], references: [id])
+
+  // Primary category (for display/breadcrumb purposes)
+  primaryCategoryId Int?     @map("primary_category_id")
+  primaryCategory   Category? @relation("PrimaryCategory", fields: [primaryCategoryId], references: [id])
+
+  // SEO (from Yoast)
+  seoTitle          String?  @map("seo_title") @db.VarChar(500)
+  seoDescription    String?  @map("seo_description") @db.Text
+  seoFocusKeyword   String?  @map("seo_focus_keyword") @db.VarChar(255)
+  readingTimeMinutes Int?    @map("reading_time_minutes")
+
+  // Relations
+  categories        PostCategory[]
+  tags              PostTag[]
+
+  // WordPress legacy ID (for migration reference)
+  wpId              Int?     @unique @map("wp_id")
+
+  @@index([status, publishedAt])
+  @@index([authorId])
+  @@index([primaryCategoryId])
+  @@map("posts")
+}
+
+model Author {
+  id          Int     @id @default(autoincrement())
+  name        String  @db.VarChar(255)
+  slug        String  @unique @db.VarChar(255)
+  email       String? @unique @db.VarChar(255)
+  bio         String? @db.Text
+  avatarUrl   String? @map("avatar_url") @db.VarChar(500)
+
+  posts       Post[]
+
+  wpId        Int?    @unique @map("wp_id")
+
+  @@map("authors")
+}
+
+model Category {
+  id          Int       @id @default(autoincrement())
+  name        String    @db.VarChar(255)
+  slug        String    @unique @db.VarChar(255)
+  fullPath    String    @default("") @unique @map("full_path") @db.VarChar(500)
+  description String?   @db.Text
+
+  // Hierarchy
+  parentId    Int?      @map("parent_id")
+  parent      Category? @relation("CategoryParent", fields: [parentId], references: [id])
+  children    Category[] @relation("CategoryParent")
+
+  // SEO (from Yoast, only a few categories have this)
+  seoTitle       String? @map("seo_title") @db.VarChar(500)
+  seoDescription String? @map("seo_description") @db.Text
+
+  posts       PostCategory[]
+  primaryPosts Post[] @relation("PrimaryCategory")
+
+  wpId        Int?    @unique @map("wp_id")
+
+  @@map("categories")
+}
+
+model Tag {
+  id    Int    @id @default(autoincrement())
+  name  String @db.VarChar(255)
+  slug  String @unique @db.VarChar(255)
+
+  posts PostTag[]
+
+  wpId  Int?   @unique @map("wp_id")
+
+  @@map("tags")
+}
+
+model PostCategory {
+  postId     Int @map("post_id")
+  categoryId Int @map("category_id")
+
+  post     Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([postId, categoryId])
+  @@map("post_categories")
+}
+
+model PostTag {
+  postId Int @map("post_id")
+  tagId  Int @map("tag_id")
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([postId, tagId])
+  @@map("post_tags")
+}
+
+model Media {
+  id        Int      @id @default(autoincrement())
+  filename  String   @db.VarChar(500)
+  url       String   @db.VarChar(1000)
+  altText   String?  @map("alt_text") @db.VarChar(500)
+  width     Int?
+  height    Int?
+  mimeType  String   @map("mime_type") @db.VarChar(100)
+  createdAt DateTime @map("created_at")
+
+  posts     Post[]
+
+  wpId      Int?     @unique @map("wp_id")
+
+  @@map("media")
+}
